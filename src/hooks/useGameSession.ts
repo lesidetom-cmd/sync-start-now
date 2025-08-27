@@ -381,18 +381,22 @@ export const useGameSession = () => {
 
   // Arrêter l'enregistrement
   const stopRecording = useCallback((): Promise<{ audioBlob: Blob; videoBlob?: Blob }> => {
-    return new Promise((resolve) => {
+    return new Promise(async (resolve) => {
       if (!mediaRecorderRef.current) {
         resolve({ audioBlob: new Blob() });
         return;
       }
 
-      mediaRecorderRef.current.onstop = () => {
+      mediaRecorderRef.current.onstop = async () => {
         if (gameState.recordingType === 'video-audio') {
           // Pour vidéo + audio, le blob contient les deux
           const videoBlob = new Blob(recordedChunksRef.current, { type: 'video/webm' });
+          
+          // Extraire l'audio du blob vidéo pour le rendu final
+          const audioBlob = await extractAudioFromVideo(videoBlob);
+          
           setGameState(prev => ({ ...prev, isRecording: false }));
-          resolve({ audioBlob: new Blob(), videoBlob });
+          resolve({ audioBlob, videoBlob });
         } else {
           // Pour audio seul
           const audioBlob = new Blob(recordedChunksRef.current, { type: 'audio/webm' });
@@ -409,6 +413,63 @@ export const useGameSession = () => {
       }
     });
   }, [gameState.recordingType]);
+
+  // Fonction utilitaire pour extraire l'audio d'une vidéo
+  const extractAudioFromVideo = useCallback(async (videoBlob: Blob): Promise<Blob> => {
+    try {
+      const videoElement = document.createElement('video');
+      const audioContext = new AudioContext();
+      
+      return new Promise((resolve, reject) => {
+        videoElement.onloadeddata = async () => {
+          try {
+            const source = audioContext.createMediaElementSource(videoElement);
+            const destination = audioContext.createMediaStreamDestination();
+            source.connect(destination);
+            
+            const mediaRecorder = new MediaRecorder(destination.stream, {
+              mimeType: 'audio/webm;codecs=opus',
+              audioBitsPerSecond: 320000
+            });
+            
+            const audioChunks: Blob[] = [];
+            mediaRecorder.ondataavailable = (event) => {
+              if (event.data.size > 0) {
+                audioChunks.push(event.data);
+              }
+            };
+            
+            mediaRecorder.onstop = () => {
+              const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+              resolve(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            videoElement.currentTime = 0;
+            await videoElement.play();
+            
+            videoElement.onended = () => {
+              mediaRecorder.stop();
+            };
+            
+          } catch (error) {
+            console.warn('Impossible d\'extraire l\'audio, utilisation du blob original:', error);
+            resolve(videoBlob); // Fallback: utiliser le blob vidéo comme audio
+          }
+        };
+        
+        videoElement.onerror = () => {
+          console.warn('Erreur de chargement vidéo, utilisation du blob original');
+          resolve(videoBlob); // Fallback
+        };
+        
+        videoElement.src = URL.createObjectURL(videoBlob);
+      });
+    } catch (error) {
+      console.warn('Extraction audio échouée, utilisation du blob original:', error);
+      return videoBlob; // Fallback
+    }
+  }, []);
 
   // Démarrer le compte à rebours et la lecture
   const startCountdownAndPlay = useCallback(async () => {
@@ -468,12 +529,13 @@ export const useGameSession = () => {
       if (gameState.recordingType === 'video-audio' && recordingResult.videoBlob) {
         // Enregistrement vidéo + audio
         const videoUrl = URL.createObjectURL(recordingResult.videoBlob);
+        const audioUrl = recordingResult.audioBlob ? URL.createObjectURL(recordingResult.audioBlob) : '';
         
         recording = {
           id: Date.now().toString(),
           videoId: currentRound.video.id,
-          audioBlob: new Blob(), // Pas d'audio séparé
-          audioUrl: '', // Pas d'URL audio séparée
+          audioBlob: recordingResult.audioBlob || new Blob(),
+          audioUrl,
           videoBlob: recordingResult.videoBlob,
           videoUrl,
           recordingType: 'video-audio',
