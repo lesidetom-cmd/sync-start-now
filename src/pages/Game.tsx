@@ -75,11 +75,24 @@ const Game: React.FC = () => {
     };
 
     const onEnded = async () => {
-      if (gameState.isRecording) {
-        // Arrêter l'enregistrement d'abord
-        await finishCurrentRound();
-        // Puis montrer les options
-        setShowEndOptions(true);
+      console.log('Video ended, isRecording:', gameState.isRecording, 'showEndOptions:', showEndOptions);
+      
+      // Ne traiter l'événement que si on est en train d'enregistrer et que les options ne sont pas déjà affichées
+      if (gameState.isRecording && !showEndOptions) {
+        try {
+          // Arrêter l'enregistrement d'abord
+          await finishCurrentRound();
+          console.log('Round finished, showing end options');
+          // Puis montrer les options
+          setShowEndOptions(true);
+        } catch (error) {
+          console.error('Error finishing round:', error);
+          toast({
+            title: "Erreur",
+            description: "Problème lors de la finalisation de l'enregistrement",
+            variant: "destructive",
+          });
+        }
       }
     };
 
@@ -90,7 +103,7 @@ const Game: React.FC = () => {
       video.removeEventListener('timeupdate', onTimeUpdate);
       video.removeEventListener('ended', onEnded);
     };
-  }, [videoRef, handleTimeUpdate, finishCurrentRound, gameState.isRecording]);
+  }, [videoRef, handleTimeUpdate, finishCurrentRound, gameState.isRecording, showEndOptions, toast]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -124,6 +137,11 @@ const Game: React.FC = () => {
       description: "Vous pouvez refaire le doublage !",
     });
   };
+
+  // Reset showEndOptions quand on change de round
+  useEffect(() => {
+    setShowEndOptions(false);
+  }, [currentSession?.currentRoundIndex]);
 
   if (!currentSession || !currentRound) {
     return (
@@ -187,7 +205,10 @@ const Game: React.FC = () => {
             
             {/* Bouton Restart permanent */}
             <Button
-              onClick={restartRound}
+              onClick={() => {
+                setShowEndOptions(false);
+                restartRound();
+              }}
               variant="outline"
               size="sm"
               className="bg-accent/10 hover:bg-accent/20 border-accent/30 text-accent"
@@ -355,7 +376,23 @@ const Game: React.FC = () => {
                   {gameState.isPlaying && !showEndOptions && (
                     <div className="flex gap-4">
                       <Button
-                        onClick={() => setShowEndOptions(true)}
+                        onClick={async () => {
+                          if (gameState.isRecording) {
+                            try {
+                              await finishCurrentRound();
+                              setShowEndOptions(true);
+                            } catch (error) {
+                              console.error('Error finishing round manually:', error);
+                              toast({
+                                title: "Erreur",
+                                description: "Problème lors de l'arrêt de l'enregistrement",
+                                variant: "destructive",
+                              });
+                            }
+                          } else {
+                            setShowEndOptions(true);
+                          }
+                        }}
                         size="lg"
                         className="bg-accent hover:bg-accent/90 px-8"
                       >

@@ -83,46 +83,48 @@ export const useGameSession = () => {
     const saveSession = async () => {
       if (currentSession) {
         try {
+          // Ne sauvegarder que les métadonnées essentielles pour éviter le quota exceeded
           const sessionToStore = {
-            ...currentSession,
-            rounds: await Promise.all(currentSession.rounds.map(async round => {
-              if (round.recording) {
-                const updatedRecording = { ...round.recording };
-                
-                // Pour les enregistrements audio seulement
-                if (round.recording.recordingType === 'audio-only' && round.recording.audioBlob instanceof Blob) {
-                  // Convertir le Blob audio en Data URL pour stockage
-                  const dataUrl = await new Promise<string>((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result as string);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(round.recording.audioBlob as Blob);
-                  });
-                  updatedRecording.audioBlob = dataUrl; // Stocker comme Data URL string
-                }
-                
-                // Pour les enregistrements vidéo + audio, on ne sauvegarde PAS dans localStorage car trop volumineux
-                // On va juste stocker les métadonnées et l'utilisateur devra re-enregistrer
-                if (round.recording.recordingType === 'video-audio') {
-                  updatedRecording.videoBlob = 'too-large-for-storage'; // Marqueur
-                  updatedRecording.videoUrl = ''; // Pas d'URL valide après rechargement
-                }
-                
-                return {
-                  ...round,
-                  recording: updatedRecording,
-                };
-              }
-              return round; // Pas d'enregistrement
+            id: currentSession.id,
+            mode: currentSession.mode,
+            currentRoundIndex: currentSession.currentRoundIndex,
+            completed: currentSession.completed,
+            createdAt: currentSession.createdAt,
+            // Pour les rounds, ne sauvegarder que les métadonnées importantes
+            rounds: currentSession.rounds.map(round => ({
+              id: round.id,
+              completed: round.completed,
+              video: {
+                id: round.video.id,
+                name: round.video.name,
+                duration: round.video.duration,
+                // Ne PAS sauvegarder l'URL ou le fichier pour éviter de saturer
+              },
+              // Pour les enregistrements, ne sauvegarder que le strict minimum
+              recording: round.recording ? {
+                id: round.recording.id,
+                videoId: round.recording.videoId,
+                recordingType: round.recording.recordingType,
+                recordedAt: round.recording.recordedAt,
+                // Ne PAS sauvegarder les blobs ou URLs pour éviter de saturer
+              } : null,
             })),
           };
-          localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, JSON.stringify(sessionToStore));
+          
+          const sessionJson = JSON.stringify(sessionToStore);
+          
+          // Vérifier la taille avant de sauvegarder
+          if (sessionJson.length < 500000) { // Limite à 500KB
+            localStorage.setItem(LOCAL_STORAGE_SESSION_KEY, sessionJson);
+          } else {
+            console.warn('Session trop volumineuse pour localStorage, sauvegarde ignorée');
+          }
         } catch (error) {
           console.error("Failed to save game session to localStorage", error);
-          // Si erreur de quota, on nettoie le localStorage pour les sessions anciennes
+          // Si erreur de quota, nettoyer complètement pour éviter les boucles
           if (error instanceof DOMException && error.name === 'QuotaExceededError') {
-            console.log('Quota exceeded, clearing session to make space');
-            localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+            console.log('Quota exceeded, clearing all storage to make space');
+            localStorage.clear(); // Nettoyer complètement
           }
         }
       } else {
