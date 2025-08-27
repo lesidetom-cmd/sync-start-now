@@ -3,14 +3,14 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
-import { useGameSession } from '@/hooks/useGameSession';
+import { useGameSession } from '@/context/GameSessionContext';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  Upload, 
-  Trash2, 
-  Video, 
-  ArrowLeft, 
-  Play, 
+import {
+  Upload,
+  Trash2,
+  Video,
+  ArrowLeft,
+  Play,
   Clock,
   HardDrive
 } from 'lucide-react';
@@ -46,7 +46,7 @@ const Admin: React.FC = () => {
           await addVideo(file);
           toast({
             title: "Vidéo ajoutée",
-            description: `"${file.name}" a été ajoutée à la bibliothèque.`,
+            description: `"${file.name}" a été ajoutée à la bibliothèque et sauvegardée localement.`,
           });
         } catch (error) {
           toast({
@@ -63,14 +63,14 @@ const Admin: React.FC = () => {
         });
       }
     }
-    
+
     event.target.value = '';
   };
 
   const handleDeleteVideo = (id: string) => {
     const video = videos.find(v => v.id === id);
     deleteVideo(id);
-    
+
     if (video) {
       toast({
         title: "Vidéo supprimée",
@@ -79,7 +79,7 @@ const Admin: React.FC = () => {
     }
   };
 
-  const canCreateGame = videos.length >= 3;
+  const canCreateGame = videos.filter(v => v.hasValidFile && v.url).length >= 3;
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,12 +92,12 @@ const Admin: React.FC = () => {
                 onClick={() => navigate('/')}
                 variant="outline"
                 size="sm"
-                className="bg-secondary/50 hover:bg-secondary"
+                className="bg-destructive/50 hover:bg-destructive text-destructive-foreground"
               >
                 <ArrowLeft className="w-4 h-4 mr-2" />
                 Retour au lobby
               </Button>
-              
+
               <div>
                 <h1 className="text-2xl font-bold text-foreground">
                   Administration
@@ -107,11 +107,16 @@ const Admin: React.FC = () => {
                 </p>
               </div>
             </div>
-            
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <HardDrive className="w-4 h-4" />
-              <span>{videos.length} vidéo{videos.length !== 1 ? 's' : ''}</span>
-            </div>
+
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <HardDrive className="w-4 h-4" />
+                <span>{videos.filter(v => v.hasValidFile).length} vidéo{videos.filter(v => v.hasValidFile).length !== 1 ? 's' : ''} valide{videos.filter(v => v.hasValidFile).length !== 1 ? 's' : ''}</span>
+                {videos.some(v => !v.hasValidFile) && (
+                  <Badge variant="destructive" className="text-xs">
+                    {videos.filter(v => !v.hasValidFile).length} à ré-importer
+                  </Badge>
+                )}
+              </div>
           </div>
         </div>
       </header>
@@ -119,7 +124,7 @@ const Admin: React.FC = () => {
       {/* Main content */}
       <main className="container mx-auto px-4 py-6">
         <div className="max-w-4xl mx-auto space-y-6">
-          
+
           {/* Section upload */}
           <Card className="p-6 bg-gradient-card border-border/50">
             <div className="space-y-4">
@@ -130,7 +135,7 @@ const Admin: React.FC = () => {
                     Bibliothèque de Vidéos
                   </h2>
                 </div>
-                
+
                 <Button
                   onClick={() => videoInputRef.current?.click()}
                   className="bg-primary hover:bg-primary/90"
@@ -154,7 +159,7 @@ const Admin: React.FC = () => {
                   <div className="w-2 h-2 bg-primary rounded-full mt-2 flex-shrink-0"></div>
                   <div className="space-y-2 text-muted-foreground">
                     <p>
-                      <strong>Comment ça marche :</strong> Importez vos vidéos favorites depuis votre PC. 
+                      <strong>Comment ça marche :</strong> Importez vos vidéos favorites depuis votre PC.
                       Elles seront automatiquement sélectionnées de façon aléatoire pour créer des parties de 3 tours.
                     </p>
                     <p>
@@ -162,6 +167,9 @@ const Admin: React.FC = () => {
                     </p>
                     <p>
                       <strong>Minimum requis :</strong> Au moins 3 vidéos pour pouvoir créer une partie.
+                    </p>
+                    <p className="text-xs text-primary/80">
+                      *Les vidéos sont sauvegardées localement dans votre navigateur.
                     </p>
                   </div>
                 </div>
@@ -239,28 +247,50 @@ const Admin: React.FC = () => {
                   videos.map((video, index) => (
                     <div
                       key={video.id}
-                      className="flex items-center gap-4 p-4 rounded-lg border border-border bg-card/50 hover:bg-card/70 transition-colors"
+                      className={`flex items-center gap-4 p-4 rounded-lg border transition-colors ${
+                        video.hasValidFile 
+                          ? 'border-border bg-card/50 hover:bg-card/70' 
+                          : 'border-destructive/30 bg-destructive/5'
+                      }`}
                     >
                       {/* Numéro et icône */}
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 bg-primary/20 rounded-full flex items-center justify-center text-sm font-medium text-primary">
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                          video.hasValidFile 
+                            ? 'bg-primary/20 text-primary' 
+                            : 'bg-destructive/20 text-destructive'
+                        }`}>
                           {index + 1}
                         </div>
-                        <Video className="w-5 h-5 text-muted-foreground" />
+                        <Video className={`w-5 h-5 ${
+                          video.hasValidFile ? 'text-muted-foreground' : 'text-destructive'
+                        }`} />
                       </div>
 
                       {/* Informations vidéo */}
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium text-foreground truncate">
-                          {video.name}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground truncate">
+                            {video.name}
+                          </p>
+                          {!video.hasValidFile && (
+                            <Badge variant="destructive" className="text-xs shrink-0">
+                              À ré-importer
+                            </Badge>
+                          )}
+                        </div>
                         <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
                           <div className="flex items-center gap-1">
                             <Clock className="w-3 h-3" />
                             <span>{formatDuration(video.duration)}</span>
                           </div>
-                          <span>{formatFileSize(video.file.size)}</span>
+                          <span>{formatFileSize(video.size)}</span>
                         </div>
+                        {!video.hasValidFile && (
+                          <p className="text-xs text-destructive mt-1">
+                            Cette vidéo doit être ré-importée pour pouvoir l'utiliser dans une partie
+                          </p>
+                        )}
                       </div>
 
                       {/* Actions */}
@@ -279,18 +309,22 @@ const Admin: React.FC = () => {
             </div>
           </Card>
 
-          {/* Info minimum vidéos */}
-          {!canCreateGame && (
-            <Card className="p-4 bg-destructive/10 border-destructive/30">
-              <div className="flex items-center gap-3">
-                <div className="w-2 h-2 bg-destructive rounded-full animate-pulse"></div>
-                <p className="text-sm text-foreground">
-                  <strong>Attention :</strong> Il vous faut au moins 3 vidéos pour créer une partie. 
-                  Actuellement : {videos.length}/3 vidéos.
-                </p>
-              </div>
-            </Card>
-          )}
+            {!canCreateGame && (
+              <Card className="p-4 bg-destructive/10 border-destructive/30">
+                <div className="flex items-center gap-3">
+                  <div className="w-2 h-2 bg-destructive rounded-full animate-pulse"></div>
+                  <p className="text-sm text-foreground">
+                    <strong>Attention :</strong> Il vous faut au moins 3 vidéos valides pour créer une partie.
+                    Actuellement : {videos.filter(v => v.hasValidFile && v.url).length}/3 vidéos prêtes.
+                    {videos.some(v => !v.hasValidFile) && (
+                      <span className="block mt-1 text-xs">
+                        {videos.filter(v => !v.hasValidFile).length} vidéo(s) nécessitent une ré-importation.
+                      </span>
+                    )}
+                  </p>
+                </div>
+              </Card>
+            )}
         </div>
       </main>
     </div>

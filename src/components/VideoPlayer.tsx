@@ -63,7 +63,7 @@ export const VideoPlayer: React.FC<VideoPlayerProps> = ({
         </div>
 
         {/* Zone de lecture vidéo */}
-        <div className="relative bg-black rounded-lg overflow-hidden min-h-[300px] flex items-center justify-center">
+        <div className="relative bg-black rounded-lg overflow-hidden min-h-[1000px] flex items-center justify-center">
           {selectedVideo ? (
             <video
               ref={videoRef}

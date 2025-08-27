@@ -9,6 +9,7 @@ import Admin from "./pages/Admin";
 import Game from "./pages/Game";
 import Results from "./pages/Results";
 import NotFound from "./pages/NotFound";
+import { GameSessionProvider } from "@/context/GameSessionContext";
 
 const queryClient = new QueryClient();
 
@@ -17,16 +18,18 @@ const App = () => (
     <TooltipProvider>
       <Toaster />
       <Sonner />
-      <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Lobby />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/game" element={<Game />} />
-          <Route path="/results" element={<Results />} />
-          {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-          <Route path="*" element={<NotFound />} />
-        </Routes>
-      </BrowserRouter>
+      <GameSessionProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route path="/" element={<Lobby />} />
+            <Route path="/admin" element={<Admin />} />
+            <Route path="/game" element={<Game />} />
+            <Route path="/results" element={<Results />} />
+            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+            <Route path="*" element={<NotFound />} />
+          </Routes>
+        </BrowserRouter>
+      </GameSessionProvider>
     </TooltipProvider>
   </QueryClientProvider>
 );

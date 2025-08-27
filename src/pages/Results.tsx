@@ -3,7 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { useGameSession } from '@/hooks/useGameSession';
+import { Progress } from '@/components/ui/progress';
+import { useGameSession } from '@/context/GameSessionContext';
+import { useVideoExporter, ExportProgress } from '@/utils/videoExporter';
+import { useToast } from '@/hooks/use-toast';
 import { 
   ArrowLeft, 
   Play, 
@@ -11,14 +14,20 @@ import {
   RotateCcw,
   Volume2,
   VolumeX,
-  Home
+  Home,
+  FileVideo,
+  Loader2
 } from 'lucide-react';
 
 const Results: React.FC = () => {
   const navigate = useNavigate();
-  const { currentSession } = useGameSession();
+  const { currentSession, resetAllData } = useGameSession();
+  const { toast } = useToast();
+  const { exportVideo, downloadVideo } = useVideoExporter();
   const [playingIndex, setPlayingIndex] = useState<number | null>(null);
   const [isMuted, setIsMuted] = useState(false);
+  const [exportingIndex, setExportingIndex] = useState<number | null>(null);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
   const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
 
@@ -84,6 +93,42 @@ const Results: React.FC = () => {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const handleExportVideo = async (index: number) => {
+    const round = completedRounds[index];
+    if (!round.recording) return;
+
+    setExportingIndex(index);
+    setExportProgress(null);
+
+    try {
+      const blob = await exportVideo(
+        round.video.url,
+        round.recording.audioUrl,
+        (progress) => {
+          setExportProgress(progress);
+        }
+      );
+
+      const filename = `doublage-complet-${round.video.name.replace(/\.[^/.]+$/, '')}`;
+      downloadVideo(blob, filename);
+
+      toast({
+        title: "Export réussi !",
+        description: `La vidéo "${round.video.name}" avec doublage a été exportée avec succès.`,
+      });
+    } catch (error) {
+      console.error('Erreur lors de l\'export:', error);
+      toast({
+        title: "Erreur d'export",
+        description: "Une erreur s'est produite lors de l'export. Veuillez réessayer.",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingIndex(null);
+      setExportProgress(null);
+    }
   };
 
   if (!currentSession || completedRounds.length === 0) {
@@ -157,7 +202,10 @@ const Results: React.FC = () => {
               </Button>
               
               <Button
-                onClick={() => navigate('/')}
+                onClick={() => {
+                  resetAllData();
+                  navigate('/');
+                }}
                 variant="outline"
                 size="sm"
                 className="bg-primary/10 border-primary/30 text-primary"
@@ -303,22 +351,60 @@ const Results: React.FC = () => {
                         )}
                       </Button>
                       
-                      {round.recording && (
-                        <Button
-                          onClick={() => downloadRecording(round.recording, round.video.name)}
-                          variant="outline"
-                          className="w-full"
-                        >
-                          <Download className="w-4 h-4 mr-2" />
-                          Télécharger l'audio
-                        </Button>
-                      )}
+                      <div className="grid grid-cols-1 gap-2">
+                        {round.recording && (
+                          <>
+                            <Button
+                              onClick={() => downloadRecording(round.recording, round.video.name)}
+                              variant="outline"
+                              className="w-full"
+                              disabled={exportingIndex === index}
+                            >
+                              <Download className="w-4 h-4 mr-2" />
+                              Télécharger l'audio
+                            </Button>
+                            
+                            <Button
+                              onClick={() => handleExportVideo(index)}
+                              variant="default"
+                              className="w-full bg-gradient-to-r from-primary to-primary-glow"
+                              disabled={exportingIndex === index}
+                            >
+                              {exportingIndex === index ? (
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                              ) : (
+                                <FileVideo className="w-4 h-4 mr-2" />
+                              )}
+                              {exportingIndex === index ? 'Export en cours...' : 'Exporter en MP4'}
+                            </Button>
+                          </>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Progress bar pour l'export */}
+                    {exportingIndex === index && exportProgress && (
+                      <div className="pt-3 border-t border-border/50">
+                        <div className="space-y-2">
+                          <div className="flex justify-between items-center">
+                            <span className="text-sm font-medium text-foreground">
+                              {exportProgress.message}
+                            </span>
+                            <span className="text-xs text-muted-foreground">
+                              {Math.round(exportProgress.progress)}%
+                            </span>
+                          </div>
+                          <Progress 
+                            value={exportProgress.progress} 
+                            className="h-2"
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pt-2 border-t border-border/50">
                       <p className="text-xs text-muted-foreground">
-                        💡 Tip: Cliquez sur "Lire avec doublage" pour voir le résultat final 
-                        avec votre voix synchronisée !
+                        💡 Tip: "Exporter en MP4" crée une vidéo complète avec votre doublage intégré !
                       </p>
                     </div>
                   </div>
@@ -352,7 +438,10 @@ const Results: React.FC = () => {
                 </Button>
                 
                 <Button
-                  onClick={() => navigate('/')}
+                  onClick={() => {
+                    resetAllData();
+                    navigate('/');
+                  }}
                   variant="outline"
                 >
                   <Home className="w-4 h-4 mr-2" />

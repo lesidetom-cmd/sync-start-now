@@ -1,10 +1,10 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { useGameSession } from '@/hooks/useGameSession';
+import { useGameSession } from '@/context/GameSessionContext';
 import { useToast } from '@/hooks/use-toast';
 import { 
   RotateCcw, 
@@ -14,7 +14,9 @@ import {
   Play,
   Square,
   ArrowRight,
-  Eye
+  Eye,
+  RefreshCw,
+  SkipForward
 } from 'lucide-react';
 
 const Game: React.FC = () => {
@@ -22,6 +24,7 @@ const Game: React.FC = () => {
   const [searchParams] = useSearchParams();
   const mode = searchParams.get('mode') || 'meme';
   const { toast } = useToast();
+  const [showEndOptions, setShowEndOptions] = useState(false);
 
   const {
     videos,
@@ -35,6 +38,7 @@ const Game: React.FC = () => {
     finishCurrentRound,
     nextRound,
     restartRound,
+    setRecordingType,
     handleTimeUpdate,
   } = useGameSession();
 
@@ -63,13 +67,19 @@ const Game: React.FC = () => {
     const video = videoRef.current;
     if (!video) return;
 
+    // Régler le volume de la vidéo pour qu'elle soit audible pendant le doublage
+    video.volume = 1.0;
+
     const onTimeUpdate = () => {
       handleTimeUpdate(video.currentTime);
     };
 
-    const onEnded = () => {
+    const onEnded = async () => {
       if (gameState.isRecording) {
-        finishCurrentRound();
+        // Arrêter l'enregistrement d'abord
+        await finishCurrentRound();
+        // Puis montrer les options
+        setShowEndOptions(true);
       }
     };
 
@@ -89,7 +99,7 @@ const Game: React.FC = () => {
   };
 
   const handleFinishAndNext = async () => {
-    await finishCurrentRound();
+    setShowEndOptions(false);
     
     if (isLastRound) {
       toast({
@@ -104,6 +114,15 @@ const Game: React.FC = () => {
         description: "Passons au tour suivant !",
       });
     }
+  };
+
+  const handleRestartRound = () => {
+    setShowEndOptions(false);
+    restartRound();
+    toast({
+      title: "Tour redémarré",
+      description: "Vous pouvez refaire le doublage !",
+    });
   };
 
   if (!currentSession || !currentRound) {
@@ -223,14 +242,21 @@ const Game: React.FC = () => {
                 </div>
 
                 {/* Zone de lecture vidéo */}
-                <div className="relative bg-black rounded-lg overflow-hidden min-h-[400px] flex items-center justify-center">
-                  <video
-                    ref={videoRef}
-                    src={currentRound.video.url}
-                    className="w-full h-full object-contain max-h-[500px]"
-                    controls={false}
-                    muted
-                  />
+                <div className="relative bg-black rounded-lg overflow-hidden min-h-[1000px] flex items-center justify-center">
+                  {currentRound?.video?.url ? (
+                    <video
+                      ref={videoRef}
+                      src={currentRound.video.url}
+                      className="w-full h-full object-contain max-h-[1000px]"
+                      controls={false}
+                      muted={false}
+                    />
+                  ) : (
+                    <div className="text-center text-muted-foreground">
+                      <div className="text-6xl mb-4">📹</div>
+                      <p className="text-lg">Chargement de la vidéo...</p>
+                    </div>
+                  )}
                   
                   {/* Overlay compte à rebours */}
                   {gameState.isCountingDown && (
@@ -244,23 +270,61 @@ const Game: React.FC = () => {
                         </p>
                       </div>
                     </div>
-                  )}
-                  
-                  {/* Status overlay */}
-                  <div className="absolute top-4 left-4 flex gap-2">
-                    {gameState.isPlaying && (
-                      <Badge className="bg-black/50 text-white border-0">
-                        <Play className="w-3 h-3 mr-1" />
-                        EN LECTURE
-                      </Badge>
-                    )}
-                    {gameState.isRecording && (
-                      <Badge className="bg-status-recording text-white border-0 animate-pulse">
-                        <Mic className="w-3 h-3 mr-1" />
-                        REC
-                      </Badge>
-                    )}
-                  </div>
+                   )}
+                   
+                   {/* Overlay des options de fin */}
+                   {showEndOptions && (
+                     <div className="absolute inset-0 bg-black/90 flex items-center justify-center">
+                       <Card className="p-8 max-w-md w-full mx-4 bg-card/95 backdrop-blur-sm">
+                         <div className="text-center space-y-6">
+                           <div className="text-4xl mb-4">🎬</div>
+                           <h3 className="text-xl font-bold text-foreground">
+                             Vidéo terminée !
+                           </h3>
+                           <p className="text-muted-foreground">
+                             Que voulez-vous faire maintenant ?
+                           </p>
+                           
+                           <div className="space-y-3">
+                             <Button
+                               onClick={handleRestartRound}
+                               variant="outline"
+                               className="w-full flex items-center justify-center gap-2"
+                               size="lg"
+                             >
+                               <RefreshCw className="w-5 h-5" />
+                               Recommencer le doublage
+                             </Button>
+                             
+                             <Button
+                               onClick={handleFinishAndNext}
+                               className="w-full flex items-center justify-center gap-2"
+                               size="lg"
+                             >
+                               <SkipForward className="w-5 h-5" />
+                               {isLastRound ? 'Terminer la partie' : 'Tour suivant'}
+                             </Button>
+                           </div>
+                         </div>
+                       </Card>
+                     </div>
+                   )}
+                   
+                   {/* Status overlay */}
+                   <div className="absolute top-4 left-4 flex gap-2">
+                     {gameState.isPlaying && (
+                       <Badge className="bg-black/50 text-white border-0">
+                         <Play className="w-3 h-3 mr-1" />
+                         EN LECTURE
+                       </Badge>
+                     )}
+                     {gameState.isRecording && (
+                       <Badge className="bg-status-recording text-white border-0 animate-pulse">
+                         <Mic className="w-3 h-3 mr-1" />
+                         REC
+                       </Badge>
+                     )}
+                   </div>
                 </div>
 
                 {/* Barre de progression vidéo */}
@@ -277,7 +341,7 @@ const Game: React.FC = () => {
 
                 {/* Contrôles principaux */}
                 <div className="flex justify-center gap-4 pt-4">
-                  {!gameState.isPlaying && !gameState.isCountingDown && (
+                  {!gameState.isPlaying && !gameState.isCountingDown && !showEndOptions && (
                     <Button
                       onClick={startCountdownAndPlay}
                       size="lg"
@@ -288,15 +352,17 @@ const Game: React.FC = () => {
                     </Button>
                   )}
                   
-                  {gameState.isPlaying && (
-                    <Button
-                      onClick={handleFinishAndNext}
-                      size="lg"
-                      className="bg-accent hover:bg-accent/90 px-8"
-                    >
-                      <Square className="w-5 h-5 mr-2" />
-                      {isLastRound ? 'Terminer la partie' : 'Tour suivant'}
-                    </Button>
+                  {gameState.isPlaying && !showEndOptions && (
+                    <div className="flex gap-4">
+                      <Button
+                        onClick={() => setShowEndOptions(true)}
+                        size="lg"
+                        className="bg-accent hover:bg-accent/90 px-8"
+                      >
+                        <Square className="w-5 h-5 mr-2" />
+                        Arrêter l'enregistrement
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -307,6 +373,62 @@ const Game: React.FC = () => {
           <div className="lg:col-span-1">
             <div className="space-y-4">
               
+              {/* Choix du type d'enregistrement */}
+              <Card className="p-4 bg-gradient-card border-border/50">
+                <h3 className="font-semibold text-foreground mb-3">Mode d'enregistrement</h3>
+                <div className="space-y-3">
+                  <div 
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      gameState.recordingType === 'audio-only'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                    }`}
+                    onClick={() => setRecordingType('audio-only')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full border-2 ${
+                        gameState.recordingType === 'audio-only'
+                          ? 'border-primary bg-primary'
+                          : 'border-muted-foreground'
+                      }`}>
+                        {gameState.recordingType === 'audio-only' && (
+                          <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">🎤 Audio seul</div>
+                        <div className="text-xs text-muted-foreground">Doublage vocal uniquement</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div 
+                    className={`p-3 rounded-lg border cursor-pointer transition-all ${
+                      gameState.recordingType === 'video-audio'
+                        ? 'border-primary bg-primary/10'
+                        : 'border-border hover:border-primary/50 hover:bg-primary/5'
+                    }`}
+                    onClick={() => setRecordingType('video-audio')}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className={`w-4 h-4 rounded-full border-2 ${
+                        gameState.recordingType === 'video-audio'
+                          ? 'border-primary bg-primary'
+                          : 'border-muted-foreground'
+                      }`}>
+                        {gameState.recordingType === 'video-audio' && (
+                          <div className="w-full h-full rounded-full bg-white scale-50"></div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-medium text-sm">📹 Vidéo + Audio</div>
+                        <div className="text-xs text-muted-foreground">Votre visage + voix</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </Card>
+
               {/* Status de l'enregistrement */}
               <Card className="p-4 bg-gradient-card border-border/50">
                 <div className="text-center space-y-3">

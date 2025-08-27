@@ -3,10 +3,24 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useNavigate } from 'react-router-dom';
-import { Smile, Settings, Play, Users } from 'lucide-react';
+import { useGameSession } from '@/context/GameSessionContext';
+import { useToast } from '@/hooks/use-toast';
+import { Smile, Settings, Play, Users, RotateCcw, Trash2 } from 'lucide-react';
 
 const Lobby: React.FC = () => {
   const navigate = useNavigate();
+  const { resetAllData, videos, currentSession } = useGameSession();
+  const { toast } = useToast();
+
+  const handleReset = () => {
+    resetAllData();
+    toast({
+      title: "Reset effectué",
+      description: "Toutes les données ont été effacées. Vous repartez de zéro !",
+    });
+  };
+
+  const hasData = videos.length > 0 || currentSession;
 
   return (
     <div className="min-h-screen bg-background">
@@ -23,14 +37,27 @@ const Lobby: React.FC = () => {
               </p>
             </div>
             
-            <Button
-              onClick={() => navigate('/admin')}
-              variant="outline"
-              className="bg-secondary/50 hover:bg-secondary"
-            >
-              <Settings className="w-4 h-4 mr-2" />
-              Admin
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={() => navigate('/admin')}
+                variant="outline"
+                className="bg-secondary/50 hover:bg-secondary"
+              >
+                <Settings className="w-4 h-4 mr-2" />
+                Admin
+              </Button>
+              
+              {hasData && (
+                <Button
+                  onClick={handleReset}
+                  variant="outline"
+                  className="bg-destructive/10 hover:bg-destructive/20 border-destructive/30 text-destructive"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Reset
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </header>

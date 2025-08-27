@@ -4,14 +4,20 @@ export interface Video {
   url: string;
   duration: number;
   file: File;
+  size: number; // Ajout de la propriété size pour stocker la taille du fichier
   thumbnail?: string;
+  dataUrl?: string; // URL de données pour la persistance des vidéos
+  hasValidFile?: boolean; // Indicateur si le fichier est valide et disponible
 }
 
 export interface Recording {
   id: string;
   videoId: string;
-  audioBlob: Blob;
+  audioBlob: Blob | string; // Peut être un Blob ou une Data URL pour la persistance
   audioUrl: string;
+  videoBlob?: Blob | string; // Optionnel - pour l'enregistrement vidéo + audio
+  videoUrl?: string; // URL de la vidéo enregistrée
+  recordingType: 'audio-only' | 'video-audio'; // Type d'enregistrement
   recordedAt: Date;
 }
 
@@ -38,4 +44,5 @@ export interface GameState {
   isRecording: boolean;
   currentTime: number;
   canRecord: boolean;
+  recordingType: 'audio-only' | 'video-audio'; // Type d'enregistrement choisi
 }
