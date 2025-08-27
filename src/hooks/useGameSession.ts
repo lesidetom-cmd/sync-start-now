@@ -31,46 +31,9 @@ export const useGameSession = () => {
     return [];
   });
 
-  // Initialiser la session de jeu depuis le localStorage
-  const [currentSession, setCurrentSession] = useState<GameSession | null>(() => {
-    try {
-      const storedSession = localStorage.getItem(LOCAL_STORAGE_SESSION_KEY);
-      if (storedSession) {
-        const parsedSession: GameSession = JSON.parse(storedSession);
-            // Reconstituer les objets Date
-            parsedSession.createdAt = new Date(parsedSession.createdAt);
-            parsedSession.rounds.forEach(round => {
-              if (round.recording) {
-                round.recording.recordedAt = new Date(round.recording.recordedAt);
-                // Convertir la Data URL en Blob si elle est stockée comme string
-                if (typeof round.recording.audioBlob === 'string' && round.recording.audioBlob.startsWith('data:')) {
-                  const byteString = atob(round.recording.audioBlob.split(',')[1]);
-                  const mimeString = round.recording.audioBlob.split(',')[0].split(':')[1].split(';')[0];
-                  const ab = new ArrayBuffer(byteString.length);
-                  const ia = new Uint8Array(ab);
-                  for (let i = 0; i < byteString.length; i++) {
-                    ia[i] = byteString.charCodeAt(i);
-                  }
-                  const rehydratedBlob = new Blob([ab], { type: mimeString });
-                  round.recording.audioBlob = rehydratedBlob;
-                  // CRITICAL: Re-generate audioUrl from the rehydrated Blob
-                  round.recording.audioUrl = URL.createObjectURL(rehydratedBlob);
-                }
-                
-                // Gérer les enregistrements vidéo qui n'ont pas pu être sauvegardés
-                if (round.recording.recordingType === 'video-audio' && round.recording.videoBlob === 'too-large-for-storage') {
-                  round.recording.videoBlob = new Blob(); // Blob vide comme placeholder
-                  round.recording.videoUrl = ''; // Pas d'URL valide
-                }
-              }
-            });
-        return parsedSession;
-      }
-    } catch (error) {
-      console.error("Failed to parse game session from localStorage", error);
-    }
-    return null;
-  });
+  // Ne pas initialiser automatiquement la session depuis le localStorage
+  // L'utilisateur devra explicitement créer une nouvelle session
+  const [currentSession, setCurrentSession] = useState<GameSession | null>(null);
 
   const [gameState, setGameState] = useState<GameState>({
     isCountingDown: false,
@@ -231,6 +194,13 @@ export const useGameSession = () => {
     }
   }, [videos]);
 
+  // Nettoyer complètement les sessions précédentes
+  const clearPreviousSession = useCallback(() => {
+    // Effacer complètement le localStorage de la session
+    localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
+    setCurrentSession(null);
+  }, []);
+
   // Créer une nouvelle session de jeu
   const createGameSession = useCallback((mode: 'meme' | 'serious') => {
     // Vérifier qu'il y a au moins 3 vidéos avec des fichiers valides
@@ -240,20 +210,23 @@ export const useGameSession = () => {
       throw new Error('Il faut au moins 3 vidéos valides pour créer une partie');
     }
 
-          // Nettoyer l'ancienne session si elle existe
-      if (currentSession) {
-        // Révoquer les URLs des anciens enregistrements pour libérer la mémoire
-        currentSession.rounds.forEach(round => {
-          if (round.recording) {
-            if (round.recording.audioUrl) {
-              URL.revokeObjectURL(round.recording.audioUrl);
-            }
-            if (round.recording.videoUrl) {
-              URL.revokeObjectURL(round.recording.videoUrl);
-            }
+    // Nettoyer l'ancienne session si elle existe
+    if (currentSession) {
+      // Révoquer les URLs des anciens enregistrements pour libérer la mémoire
+      currentSession.rounds.forEach(round => {
+        if (round.recording) {
+          if (round.recording.audioUrl) {
+            URL.revokeObjectURL(round.recording.audioUrl);
           }
-        });
-      }
+          if (round.recording.videoUrl) {
+            URL.revokeObjectURL(round.recording.videoUrl);
+          }
+        }
+      });
+    }
+
+    // COMPLÈTEMENT effacer le localStorage de la session
+    localStorage.removeItem(LOCAL_STORAGE_SESSION_KEY);
 
     // Sélectionner 3 vidéos aléatoirement parmi les valides
     const shuffled = [...validVideos].sort(() => 0.5 - Math.random());
